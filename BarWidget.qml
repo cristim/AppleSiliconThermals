@@ -95,12 +95,12 @@ BarWidget {
     slotSize: Style.bar.statusSlot
     fontSize: Style.font.caption
 
-    // Change color depending on heat or manual mode
-    color: {
+    // Change foreground color depending on heat or manual mode
+    foreground: {
       if (root.maxTemp >= 80) return Color.urgent
       if (root.maxTemp >= 65) return "#ffaa00"
       if (root.manualMode) return Color.accent
-      return root.bar ? root.bar.foreground : Color.foreground
+      return root.bar ? root.bar.barForeground : Color.foreground
     }
 
     tooltipText: "Apple Silicon Thermals: " + root.fanRpm + " RPM | " + root.maxTemp + "°C"
@@ -109,9 +109,8 @@ BarWidget {
       root.togglePopup()
     }
 
-    // Dynamic rotation when fan is active
-    RotationAnimator on rotation {
-      target: button
+    // Dynamic glyph rotation when fan is active
+    NumberAnimation on textRotation {
       from: 0
       to: 360
       duration: Math.max(400, Math.round(60000 / Math.max(root.fanRpm, 600)))
@@ -211,7 +210,6 @@ BarWidget {
 
           Column {
             anchors.verticalCenter: parent.verticalCenter
-            horizontalAlignment: Text.AlignRight
             width: parent.width * 0.45
             spacing: Style.space(2)
 
@@ -265,7 +263,7 @@ BarWidget {
               text: "Ejecuta en tu terminal: sudo " + root.helperPath + " setup"
               color: root.bar ? root.bar.foreground : Color.foreground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
-              font.pixelSize: Style.font.small
+              font.pixelSize: Style.font.caption
               wrapMode: Text.Wrap
               width: parent.width
             }
@@ -307,16 +305,23 @@ BarWidget {
           visible: root.fanControlEnabled && root.manualMode
           spacing: Style.space(4)
 
-          Row {
+          Item {
             width: parent.width
+            height: targetLabel.implicitHeight
+
             Text {
+              id: targetLabel
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
               text: "Velocidad objetivo:"
               color: Qt.rgba(1, 1, 1, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
             }
+
             Text {
               anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
               text: Math.round(rpmSlider.liveValue) + " RPM"
               color: Color.accent
               font.bold: true
