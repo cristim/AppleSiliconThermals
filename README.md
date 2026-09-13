@@ -72,6 +72,24 @@ This automated script:
 
 ---
 
+## Uninstallation & Removal
+
+To remove the plugin from your Omarchy bar:
+
+```bash
+omarchy plugin disable AppleSiliconThermals
+omarchy plugin remove AppleSiliconThermals
+```
+
+*(Optional)* If you ran the one-time `setup.sh` and wish to revert the kernel parameter and udev rules back to system defaults:
+
+```bash
+sudo ~/.config/omarchy/plugins/AppleSiliconThermals/uninstall.sh
+```
+*(Or manually remove `/etc/udev/rules.d/99-macsmc-fan.rules` and `/etc/tmpfiles.d/macsmc-fan.conf`).*
+
+---
+
 ## Hardware Compatibility & Community Testing
 
 This plugin is purpose-built for Apple Silicon hardware running Linux. It dynamically adapts its UI depending on the detected Mac model and available cooling architecture:
