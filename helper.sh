@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+get_device_model() {
+  local model="Apple Silicon Mac"
+  if [[ -f /proc/device-tree/model ]]; then
+    model=$(tr -d '\0' < /proc/device-tree/model | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+  elif [[ -f /sys/firmware/devicetree/base/model ]]; then
+    model=$(tr -d '\0' < /sys/firmware/devicetree/base/model | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+  fi
+  echo "${model//\"/\\\"}"
+}
+
 find_macsmc_hwmon() {
   local dir
   for dir in /sys/class/hwmon/hwmon*; do
@@ -94,8 +104,11 @@ cmd_get() {
     power_val=$(awk "BEGIN { printf \"%.2f\", $raw_p / 1000000 }")
   fi
 
-  printf '{"fan_rpm":%d,"fan_min":%d,"fan_max":%d,"fan_target":%d,"fan_control_enabled":%s,"manual_mode":%s,"max_temp":%s,"power_watts":%s,"sensors":{"nand":%s,"battery":%s,"regulator":%s,"wifi":%s}}\n' \
-    "$fan_rpm" "$fan_min" "$fan_max" "$fan_target" "$fan_control_enabled" "$manual_mode" "$max_temp" "$power_val" \
+  local device_model
+  device_model="$(get_device_model)"
+
+  printf '{"fan_rpm":%d,"fan_min":%d,"fan_max":%d,"fan_target":%d,"fan_control_enabled":%s,"manual_mode":%s,"max_temp":%s,"power_watts":%s,"device_model":"%s","sensors":{"nand":%s,"battery":%s,"regulator":%s,"wifi":%s}}\n' \
+    "$fan_rpm" "$fan_min" "$fan_max" "$fan_target" "$fan_control_enabled" "$manual_mode" "$max_temp" "$power_val" "$device_model" \
     "$temp_nand" "$temp_battery" "$temp_regulator" "$temp_wifi"
 }
 
@@ -124,7 +137,7 @@ cmd_set() {
     return 0
   fi
 
-  echo "Error: Invalid target '$target'. Specify RPM (1200-7200) or 'auto'." >&2
+  echo "Error: Invalid target '$target'. Specify RPM (1199-7199) or 'auto'." >&2
   return 1
 }
 

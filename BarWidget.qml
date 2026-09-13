@@ -17,10 +17,19 @@ BarWidget {
   property bool manualMode: false
   property real maxTemp: 0
   property real powerWatts: 0
+  property string deviceModel: "Apple Silicon Mac"
   property var sensors: ({})
 
   property bool popupOpen: false
   readonly property string helperPath: Qt.resolvedUrl("helper.sh").toString().replace(/^file:\/\//, "")
+
+  function snapSpeed(val) {
+    var min = root.fanMin || 1199
+    var max = root.fanMax || 7199
+    var clamped = Math.max(min, Math.min(max, val))
+    var stepIndex = Math.round((clamped - min) / 50)
+    return Math.min(max, min + stepIndex * 50)
+  }
 
   function applyData(jsonStr) {
     try {
@@ -34,6 +43,7 @@ BarWidget {
         root.manualMode = Boolean(data.manual_mode)
         root.maxTemp = (data.max_temp !== undefined) ? data.max_temp : 0
         root.powerWatts = (data.power_watts !== undefined) ? data.power_watts : 0
+        if (data.device_model) root.deviceModel = data.device_model
         root.sensors = data.sensors || {}
       }
     } catch (e) {
@@ -186,7 +196,7 @@ BarWidget {
           }
 
           Text {
-            text: "MacBook Pro (13-inch, M1, 2020)"
+            text: root.deviceModel
             color: Qt.rgba(1, 1, 1, 0.6)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
@@ -213,7 +223,7 @@ BarWidget {
             width: parent.width * 0.55
 
             Text {
-              text: root.fanRpm > 0 ? (root.fanRpm + " RPM") : "0 RPM (Silencioso)"
+              text: root.fanRpm > 0 ? (root.fanRpm + " RPM") : "0 RPM (Silent)"
               color: root.bar ? root.bar.foreground : Color.foreground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.title
@@ -221,7 +231,7 @@ BarWidget {
             }
 
             Text {
-              text: root.manualMode ? ("Manual (" + root.fanTarget + " RPM)") : "Automático (SMC)"
+              text: root.manualMode ? ("Manual (" + root.fanTarget + " RPM)") : "Automatic (SMC)"
               color: root.manualMode ? Color.accent : Qt.rgba(1, 1, 1, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
@@ -244,7 +254,7 @@ BarWidget {
 
             Text {
               anchors.right: parent.right
-              text: root.powerWatts + " W (Potencia)"
+              text: root.powerWatts + " W (System Power)"
               color: Qt.rgba(1, 1, 1, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
@@ -273,14 +283,14 @@ BarWidget {
             spacing: Style.space(2)
 
             Text {
-              text: "⚠ Control manual inactivo en kernel"
+              text: "⚠ Manual fan control disabled in kernel"
               color: "#ffbb33"
               font.bold: true
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
             }
             Text {
-              text: "Ejecuta en tu terminal: sudo " + root.helperPath + " setup"
+              text: "Run in your terminal: sudo " + root.helperPath + " setup"
               color: root.bar ? root.bar.foreground : Color.foreground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
@@ -298,7 +308,7 @@ BarWidget {
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: "Control Manual de Velocidad"
+            text: "Manual Fan Speed Control"
             color: root.bar ? root.bar.foreground : Color.foreground
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.body
@@ -313,7 +323,7 @@ BarWidget {
               if (root.manualMode) {
                 root.setSpeed("auto")
               } else {
-                root.setSpeed(root.fanRpm > 1200 ? root.fanRpm : 2500)
+                root.setSpeed(root.fanRpm >= root.fanMin ? root.snapSpeed(root.fanRpm) : 1799)
               }
             }
           }
@@ -333,7 +343,7 @@ BarWidget {
               id: targetLabel
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
-              text: "Velocidad objetivo:"
+              text: "Target speed:"
               color: Qt.rgba(1, 1, 1, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
@@ -342,7 +352,7 @@ BarWidget {
             Text {
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              text: Math.round(rpmSlider.liveValue) + " RPM"
+              text: root.snapSpeed(rpmSlider.liveValue) + " RPM"
               color: Color.accent
               font.bold: true
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
@@ -354,13 +364,13 @@ BarWidget {
             id: rpmSlider
             width: parent.width
             bar: root.bar
-            minimum: 1200
-            maximum: 7200
-            step: 100
+            minimum: root.fanMin
+            maximum: root.fanMax
+            step: 50
             integer: true
-            value: root.fanTarget >= 1200 ? root.fanTarget : 2500
+            value: root.fanTarget >= root.fanMin ? root.fanTarget : 1799
             onReleased: function(val) {
-              root.setSpeed(Math.round(val))
+              root.setSpeed(root.snapSpeed(val))
             }
           }
         }
@@ -373,6 +383,7 @@ BarWidget {
 
           Button {
             text: "Auto"
+            tooltipText: "Automatic Apple SMC hardware management"
             width: (parent.width - Style.space(18)) / 4
             selected: !root.manualMode
             onClicked: root.setSpeed("auto")
@@ -380,23 +391,69 @@ BarWidget {
 
           Button {
             text: "Quiet"
+            tooltipText: "Quiet cooling: 25% (1,799 RPM)"
             width: (parent.width - Style.space(18)) / 4
-            selected: root.manualMode && Math.abs(root.fanTarget - 1500) < 300
-            onClicked: root.setSpeed(1500)
+            selected: root.manualMode && Math.abs(root.fanTarget - 1799) < 250
+            onClicked: root.setSpeed(1799)
           }
 
           Button {
-            text: "Medio"
+            text: "Regular"
+            tooltipText: "Balanced cooling: 50% (3,599 RPM)"
             width: (parent.width - Style.space(18)) / 4
-            selected: root.manualMode && Math.abs(root.fanTarget - 3500) < 300
-            onClicked: root.setSpeed(3500)
+            selected: root.manualMode && Math.abs(root.fanTarget - 3599) < 250
+            onClicked: root.setSpeed(3599)
           }
 
           Button {
             text: "Max"
+            tooltipText: "Maximum cooling: 100% (7,199 RPM)"
             width: (parent.width - Style.space(18)) / 4
             selected: root.manualMode && root.fanTarget >= 7000
             onClicked: root.setSpeed(7199)
+          }
+        }
+
+        // Percentage subtext row for preset chips
+        Row {
+          width: parent.width
+          visible: root.fanControlEnabled
+          spacing: Style.space(6)
+
+          Text {
+            width: (parent.width - Style.space(18)) / 4
+            horizontalAlignment: Text.AlignHCenter
+            text: "SMC"
+            color: Qt.rgba(1, 1, 1, 0.45)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            width: (parent.width - Style.space(18)) / 4
+            horizontalAlignment: Text.AlignHCenter
+            text: "25%"
+            color: Qt.rgba(1, 1, 1, 0.45)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            width: (parent.width - Style.space(18)) / 4
+            horizontalAlignment: Text.AlignHCenter
+            text: "50%"
+            color: Qt.rgba(1, 1, 1, 0.45)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            width: (parent.width - Style.space(18)) / 4
+            horizontalAlignment: Text.AlignHCenter
+            text: "100%"
+            color: Qt.rgba(1, 1, 1, 0.45)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
           }
         }
       }
@@ -409,7 +466,7 @@ BarWidget {
         spacing: Style.space(6)
 
         Text {
-          text: "SENSORES DE HARDWARE M1"
+          text: "APPLE SILICON SENSORS"
           color: Qt.rgba(1, 1, 1, 0.5)
           font.family: root.bar ? root.bar.fontFamily : Style.font.family
           font.pixelSize: Style.font.caption
@@ -431,14 +488,14 @@ BarWidget {
           Row {
             width: (parent.width - Style.space(6)) / 2
             spacing: Style.space(4)
-            Text { text: "Batería:"; color: Qt.rgba(1, 1, 1, 0.6); font.pixelSize: Style.font.caption }
+            Text { text: "Battery:"; color: Qt.rgba(1, 1, 1, 0.6); font.pixelSize: Style.font.caption }
             Text { text: (root.sensors.battery || "--") + "°C"; color: root.bar ? root.bar.foreground : Color.foreground; font.bold: true; font.pixelSize: Style.font.caption }
           }
 
           Row {
             width: (parent.width - Style.space(6)) / 2
             spacing: Style.space(4)
-            Text { text: "Regulador:"; color: Qt.rgba(1, 1, 1, 0.6); font.pixelSize: Style.font.caption }
+            Text { text: "Regulator:"; color: Qt.rgba(1, 1, 1, 0.6); font.pixelSize: Style.font.caption }
             Text { text: (root.sensors.regulator || "--") + "°C"; color: root.bar ? root.bar.foreground : Color.foreground; font.bold: true; font.pixelSize: Style.font.caption }
           }
 

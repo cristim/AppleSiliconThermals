@@ -16,12 +16,12 @@ Inspired by the macOS menu bar utility **Stats**, **AppleSiliconThermals** bridg
 
 - 🎛️ **Dual-Mode Fan Control (macOS Stats Style)**:
   - **Automatic Mode**: Relaxes fan management back to Apple's calibrated hardware SMC algorithms.
-  - **Manual Mode**: Precision continuous slider from **1,200 RPM to 7,200 RPM**.
+  - **Manual Mode**: Precision continuous slider from **1,199 RPM to 7,199 RPM** with 50 RPM quantization snapping to values ending in **49** and **99** for authentic macOS Stats parity.
   - **Instant Preset Chips**:
     - `Auto`: Restores automatic SMC hardware management (`0 RPM` idle / dynamic).
-    - `Quiet`: Fixes fan at whisper-quiet `1,500 RPM`.
-    - `Medio`: Balanced cooling at `3,500 RPM`.
-    - `Max`: High-performance cooling at `7,199 RPM` for compiling, gaming, or heavy workloads.
+    - `Quiet`: Fixes fan at whisper-quiet **25%** (`1,799 RPM`).
+    - `Regular`: Balanced cooling at **50%** (`3,599 RPM`).
+    - `Max`: High-performance cooling at **100%** (`7,199 RPM`) for compiling, gaming, or heavy workloads.
 
 - 🌡️ **Comprehensive Hardware Telemetry**:
   - Live Fan Speed (Current RPM, Target RPM, Minimum & Maximum limits).
