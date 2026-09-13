@@ -22,12 +22,44 @@ find_macsmc_hwmon() {
   return 1
 }
 
+is_apple_silicon() {
+  if [[ -f /proc/device-tree/compatible ]] && grep -q "apple," /proc/device-tree/compatible 2>/dev/null; then
+    return 0
+  fi
+  if [[ -f /proc/device-tree/model ]] && grep -q "^Apple" /proc/device-tree/model 2>/dev/null; then
+    return 0
+  fi
+  if [[ -n "$HWMON_DIR" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 HWMON_DIR="$(find_macsmc_hwmon || true)"
 
 cmd_get() {
+  if ! is_apple_silicon; then
+    printf '{"is_apple_silicon":false,"has_fan":false,"fan_count":0,"error":"unsupported_hardware","device_model":"Non-Apple Hardware"}\n'
+    return 0
+  fi
+
+  local device_model
+  device_model="$(get_device_model)"
+
   if [[ -z "$HWMON_DIR" || ! -d "$HWMON_DIR" ]]; then
-    echo '{"error":"macsmc_hwmon not found"}'
-    return 1
+    printf '{"is_apple_silicon":true,"has_fan":false,"fan_count":0,"error":"macsmc_hwmon_missing","device_model":"%s"}\n' "$device_model"
+    return 0
+  fi
+
+  local fan_count=0
+  local has_fan=false
+  for f in "$HWMON_DIR"/fan*_input; do
+    if [[ -f "$f" ]]; then
+      fan_count=$((fan_count + 1))
+    fi
+  done
+  if (( fan_count > 0 )); then
+    has_fan=true
   fi
 
   local fan_rpm=0
@@ -104,23 +136,34 @@ cmd_get() {
     power_val=$(awk "BEGIN { printf \"%.2f\", $raw_p / 1000000 }")
   fi
 
-  local device_model
-  device_model="$(get_device_model)"
-
-  printf '{"fan_rpm":%d,"fan_min":%d,"fan_max":%d,"fan_target":%d,"fan_control_enabled":%s,"manual_mode":%s,"max_temp":%s,"power_watts":%s,"device_model":"%s","sensors":{"nand":%s,"battery":%s,"regulator":%s,"wifi":%s}}\n' \
-    "$fan_rpm" "$fan_min" "$fan_max" "$fan_target" "$fan_control_enabled" "$manual_mode" "$max_temp" "$power_val" "$device_model" \
+  printf '{"is_apple_silicon":true,"has_fan":%s,"fan_count":%d,"fan_rpm":%d,"fan_min":%d,"fan_max":%d,"fan_target":%d,"fan_control_enabled":%s,"manual_mode":%s,"max_temp":%s,"power_watts":%s,"device_model":"%s","sensors":{"nand":%s,"battery":%s,"regulator":%s,"wifi":%s}}\n' \
+    "$has_fan" "$fan_count" "$fan_rpm" "$fan_min" "$fan_max" "$fan_target" "$fan_control_enabled" "$manual_mode" "$max_temp" "$power_val" "$device_model" \
     "$temp_nand" "$temp_battery" "$temp_regulator" "$temp_wifi"
 }
 
 cmd_set() {
   local target="${1:-auto}"
-  if [[ -z "$HWMON_DIR" || ! -f "$HWMON_DIR/fan1_target" ]]; then
+  if [[ -z "$HWMON_DIR" ]]; then
     echo "Error: macsmc_hwmon target not available" >&2
     return 1
   fi
 
+  local targets=()
+  for t in "$HWMON_DIR"/fan*_target; do
+    if [[ -f "$t" ]]; then
+      targets+=("$t")
+    fi
+  done
+
+  if [[ ${#targets[@]} -eq 0 ]]; then
+    echo "Error: No fan target sysfs files found on this machine (fanless or unsupported)" >&2
+    return 1
+  fi
+
   if [[ "$target" == "auto" || "$target" == "0" ]]; then
-    echo 0 > "$HWMON_DIR/fan1_target"
+    for t in "${targets[@]}"; do
+      echo 0 > "$t"
+    done
     echo "Fan control reset to automatic SMC mode"
     return 0
   fi
@@ -132,8 +175,10 @@ cmd_set() {
     max=$(cat "$HWMON_DIR/fan1_max" 2>/dev/null || echo 7199)
     if (( target < min )); then target=$min; fi
     if (( target > max )); then target=$max; fi
-    echo "$target" > "$HWMON_DIR/fan1_target"
-    echo "Fan speed set to $target RPM"
+    for t in "${targets[@]}"; do
+      echo "$target" > "$t"
+    done
+    echo "Fan speed set to $target RPM across ${#targets[@]} fan(s)"
     return 0
   fi
 
@@ -144,6 +189,12 @@ cmd_set() {
 cmd_setup() {
   if [[ $EUID -ne 0 ]]; then
     echo "Please run setup as root (sudo ./helper.sh setup)" >&2
+    exit 1
+  fi
+
+  if ! is_apple_silicon; then
+    echo "Error: Apple Silicon hardware (macsmc_hwmon) not detected." >&2
+    echo "This plugin is designed only for Apple Silicon Macs running Linux." >&2
     exit 1
   fi
 
@@ -161,14 +212,14 @@ EOF
   echo "3. Configuring udev rule for fan permissions in /etc/udev/rules.d/99-macsmc-fan.rules..."
   mkdir -p /etc/udev/rules.d
   cat <<'EOF' > /etc/udev/rules.d/99-macsmc-fan.rules
-ACTION=="add|change", SUBSYSTEM=="hwmon", ATTRS{name}=="macsmc_hwmon", RUN+="/usr/bin/chmod 0666 /sys%p/fan1_target"
+ACTION=="add|change", SUBSYSTEM=="hwmon", ATTRS{name}=="macsmc_hwmon", RUN+="/usr/bin/sh -c 'chmod 0666 /sys%p/fan*_target 2>/dev/null || true'"
 EOF
 
   echo "4. Applying immediate permissions..."
   local hw
   hw="$(find_macsmc_hwmon || true)"
-  if [[ -n "$hw" && -f "$hw/fan1_target" ]]; then
-    chmod 0666 "$hw/fan1_target"
+  if [[ -n "$hw" ]]; then
+    chmod 0666 "$hw"/fan*_target 2>/dev/null || true
   fi
 
   echo "Setup complete! Manual fan control is now active and accessible to regular users."

@@ -18,6 +18,9 @@ BarWidget {
   property real maxTemp: 0
   property real powerWatts: 0
   property string deviceModel: "Apple Silicon Mac"
+  property bool isAppleSilicon: true
+  property bool hasFan: true
+  property int fanCount: 1
   property var sensors: ({})
 
   property bool popupOpen: false
@@ -34,17 +37,23 @@ BarWidget {
   function applyData(jsonStr) {
     try {
       var data = JSON.parse(jsonStr)
-      if (data && !data.error) {
-        root.fanRpm = (data.fan_rpm !== undefined) ? data.fan_rpm : 0
-        root.fanMin = data.fan_min || 1199
-        root.fanMax = data.fan_max || 7199
-        root.fanTarget = (data.fan_target !== undefined) ? data.fan_target : 0
-        root.fanControlEnabled = Boolean(data.fan_control_enabled)
-        root.manualMode = Boolean(data.manual_mode)
-        root.maxTemp = (data.max_temp !== undefined) ? data.max_temp : 0
-        root.powerWatts = (data.power_watts !== undefined) ? data.power_watts : 0
+      if (data) {
+        if (data.is_apple_silicon !== undefined) root.isAppleSilicon = Boolean(data.is_apple_silicon)
+        if (data.has_fan !== undefined) root.hasFan = Boolean(data.has_fan)
+        if (data.fan_count !== undefined) root.fanCount = Number(data.fan_count)
         if (data.device_model) root.deviceModel = data.device_model
-        root.sensors = data.sensors || {}
+
+        if (!data.error) {
+          root.fanRpm = (data.fan_rpm !== undefined) ? data.fan_rpm : 0
+          root.fanMin = data.fan_min || 1199
+          root.fanMax = data.fan_max || 7199
+          root.fanTarget = (data.fan_target !== undefined) ? data.fan_target : 0
+          root.fanControlEnabled = Boolean(data.fan_control_enabled)
+          root.manualMode = Boolean(data.manual_mode)
+          root.maxTemp = (data.max_temp !== undefined) ? data.max_temp : 0
+          root.powerWatts = (data.power_watts !== undefined) ? data.power_watts : 0
+          root.sensors = data.sensors || {}
+        }
       }
     } catch (e) {
       console.warn("AppleSiliconThermals parse error:", e, jsonStr)
@@ -121,19 +130,24 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "󰈐"
+    text: !root.isAppleSilicon ? "󰌺" : (root.hasFan ? "󰈐" : "󰔏")
     slotSize: Style.bar.statusSlot
     fontSize: Style.font.caption
 
     // Change foreground color depending on heat or manual mode
     foreground: {
+      if (!root.isAppleSilicon) return Qt.rgba(1, 1, 1, 0.35)
       if (root.maxTemp >= 80) return Color.urgent
       if (root.maxTemp >= 65) return "#ffaa00"
       if (root.manualMode) return Color.accent
       return root.bar ? root.bar.barForeground : Color.foreground
     }
 
-    tooltipText: "Apple Silicon Thermals: " + root.fanRpm + " RPM | " + root.maxTemp + "°C"
+    tooltipText: {
+      if (!root.isAppleSilicon) return "Apple Silicon Thermals: Unsupported non-Apple hardware"
+      if (!root.hasFan) return "Apple Silicon Thermals: " + root.maxTemp + "°C (Fanless)"
+      return "Apple Silicon Thermals: " + root.fanRpm + " RPM | " + root.maxTemp + "°C"
+    }
 
     onPressed: function(b) {
       root.togglePopup()
@@ -145,7 +159,7 @@ BarWidget {
       to: 360
       duration: Math.max(400, Math.round(60000 / Math.max(root.fanRpm, 600)))
       loops: Animation.Infinite
-      running: root.fanRpm > 0
+      running: root.isAppleSilicon && root.hasFan && root.fanRpm > 0
     }
   }
 
@@ -156,11 +170,93 @@ BarWidget {
     owner: root
     open: root.popupOpen
     contentWidth: popup.fittedContentWidth(Style.space(340))
-    contentHeight: popup.fittedContentHeight(mainCol.implicitHeight)
+    contentHeight: popup.fittedContentHeight(root.isAppleSilicon ? mainCol.implicitHeight : unsupportedCol.implicitHeight)
+
+    // Unsupported hardware notice column
+    Column {
+      id: unsupportedCol
+      anchors.fill: parent
+      visible: !root.isAppleSilicon
+      spacing: Style.space(12)
+
+      Row {
+        spacing: Style.space(10)
+        width: parent.width
+
+        BorderSurface {
+          width: Style.space(36)
+          height: Style.space(36)
+          radius: Style.spacing.labelGap
+          color: Qt.rgba(1, 0.2, 0.2, 0.15)
+
+          Text {
+            anchors.centerIn: parent
+            text: "󰌺"
+            color: Color.urgent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.subtitle
+          }
+        }
+
+        Column {
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Style.space(2)
+
+          Text {
+            text: "Unsupported Hardware"
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.body
+            font.bold: true
+          }
+
+          Text {
+            text: "Apple Silicon Mac required"
+            color: Qt.rgba(1, 1, 1, 0.6)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+        }
+      }
+
+      PanelSeparator { width: parent.width }
+
+      BorderSurface {
+        width: parent.width
+        radius: Style.cornerRadius
+        color: Style.normalFillFor(root.bar ? root.bar.foreground : Color.foreground, Color.accent)
+        height: Style.space(78)
+
+        Column {
+          anchors.fill: parent
+          anchors.margins: Style.space(10)
+          spacing: Style.space(4)
+
+          Text {
+            text: "This plugin is designed exclusively for Apple Silicon Macs (M1 / M2 / Pro / Max / Ultra) running Linux."
+            color: root.bar ? root.bar.foreground : Color.foreground
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Text {
+            text: "No Apple SMC hardware or macsmc_hwmon driver was found on this system."
+            color: Qt.rgba(1, 1, 1, 0.5)
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+        }
+      }
+    }
 
     Column {
       id: mainCol
       anchors.fill: parent
+      visible: root.isAppleSilicon
       spacing: Style.space(12)
 
       // Header row
@@ -176,7 +272,7 @@ BarWidget {
 
           Text {
             anchors.centerIn: parent
-            text: "󰈐"
+            text: root.hasFan ? "󰈐" : "󰔏"
             color: root.manualMode ? Color.accent : (root.bar ? root.bar.foreground : Color.foreground)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.subtitle
@@ -196,7 +292,7 @@ BarWidget {
           }
 
           Text {
-            text: root.deviceModel
+            text: root.deviceModel + (root.hasFan ? (root.fanCount > 1 ? (" • " + root.fanCount + " Fans Synchronized") : "") : " • Fanless")
             color: Qt.rgba(1, 1, 1, 0.6)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
@@ -223,7 +319,7 @@ BarWidget {
             width: parent.width * 0.55
 
             Text {
-              text: root.fanRpm > 0 ? (root.fanRpm + " RPM") : "0 RPM (Silent)"
+              text: root.hasFan ? (root.fanRpm > 0 ? (root.fanRpm + " RPM") : "0 RPM (Silent)") : (root.maxTemp + "°C")
               color: root.bar ? root.bar.foreground : Color.foreground
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.title
@@ -231,8 +327,8 @@ BarWidget {
             }
 
             Text {
-              text: root.manualMode ? ("Manual (" + root.fanTarget + " RPM)") : "Automatic (SMC)"
-              color: root.manualMode ? Color.accent : Qt.rgba(1, 1, 1, 0.6)
+              text: root.hasFan ? (root.manualMode ? ("Manual (" + root.fanTarget + " RPM)") : "Automatic (SMC)") : "Passive Cooling (Silent)"
+              color: (root.hasFan && root.manualMode) ? Color.accent : Qt.rgba(1, 1, 1, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
             }
@@ -245,7 +341,7 @@ BarWidget {
 
             Text {
               anchors.right: parent.right
-              text: root.maxTemp + "°C"
+              text: root.hasFan ? (root.maxTemp + "°C") : (root.powerWatts + " W")
               color: root.maxTemp >= 75 ? Color.urgent : (root.bar ? root.bar.foreground : Color.foreground)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.title
@@ -254,7 +350,7 @@ BarWidget {
 
             Text {
               anchors.right: parent.right
-              text: root.powerWatts + " W (System Power)"
+              text: root.hasFan ? (root.powerWatts + " W (System Power)") : "System Power"
               color: Qt.rgba(1, 1, 1, 0.6)
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: Style.font.caption
@@ -266,7 +362,26 @@ BarWidget {
       // Fan Control Section
       Column {
         width: parent.width
+        visible: root.hasFan
         spacing: Style.space(8)
+
+        // Multi-fan indicator if more than 1 fan is present (Mac Studio / Mac Pro)
+        BorderSurface {
+          width: parent.width
+          visible: root.fanCount > 1
+          radius: Style.spacing.labelGap
+          color: Qt.rgba(0, 0.6, 1, 0.12)
+          borderSpec: Border.flat(Color.accent, 1)
+          height: Style.space(26)
+
+          Text {
+            anchors.centerIn: parent
+            text: "󰈐 Synchronous Multi-Fan Control (" + root.fanCount + " Fans)"
+            color: Color.accent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+        }
 
         // Setup notification if fan_control is not yet active
         BorderSurface {
@@ -454,6 +569,52 @@ BarWidget {
             color: Qt.rgba(1, 1, 1, 0.45)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
             font.pixelSize: Style.font.caption
+          }
+        }
+      }
+
+      // Fanless Architecture Card (Visible on MacBook Air)
+      BorderSurface {
+        width: parent.width
+        visible: !root.hasFan
+        radius: Style.cornerRadius
+        color: Style.normalFillFor(root.bar ? root.bar.foreground : Color.foreground, Color.accent)
+        height: Style.space(72)
+
+        Row {
+          anchors.fill: parent
+          anchors.margins: Style.space(10)
+          spacing: Style.space(10)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "󰔏"
+            color: Color.accent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.title
+          }
+
+          Column {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(2)
+            width: parent.width - Style.space(36)
+
+            Text {
+              text: "Passive Cooling Architecture"
+              color: root.bar ? root.bar.foreground : Color.foreground
+              font.bold: true
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+
+            Text {
+              text: "This Mac uses silent passive cooling without physical fans. Thermals are automatically managed by the Apple Silicon SoC."
+              color: Qt.rgba(1, 1, 1, 0.6)
+              font.family: root.bar ? root.bar.fontFamily : Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
           }
         }
       }

@@ -83,6 +83,26 @@ git push -u origin main
 
 ---
 
+## 🖥️ Hardware Compatibility & Community Testing
+
+This plugin is purpose-built for Apple Silicon hardware running Linux. It dynamically adapts its UI depending on the detected Mac model and available cooling architecture:
+
+| Hardware Category | Models | Supported Features | Status |
+| :--- | :--- | :--- | :--- |
+| **MacBook Pro** | 13" M1 (2020), 14"/16" M1/M2 Pro & Max | Live telemetry, spinning fan icon, continuous slider & presets | **Verified & Tested** |
+| **MacBook Air** | 13"/15" M1 / M2 | Live component thermals & power; adapts to fanless mode (`󰔏` icon) | **Supported** |
+| **Mac mini** | M1 / M2 / M2 Pro | Full fan control & thermal monitoring (Single fan) | **Community Testing** |
+| **Mac Studio** | M1/M2 Max & Ultra | Synchronous dual-fan control & telemetry | **Call for Testing** |
+| **Mac Pro** | M2 Ultra | Synchronous multi-fan control & telemetry | **Call for Testing** |
+| **iMac** | 24" M1 (2-port & 4-port) | Single / dual-fan control & telemetry | **Call for Testing** |
+| **Non-Apple / x86** | Standard PCs, VMs, Intel/AMD | Inactive warning icon (`󰌺`) & unsupported hardware notice | **Handled / Inactive** |
+
+> [!TIP]
+> **Do you own a Mac Studio, Mac mini, Mac Pro, or iMac?**
+> We would love your feedback! Please [open an issue](https://github.com/<your-username>/AppleSiliconThermals/issues) with your hardware details and test results to help refine multi-fan curves and fan channel independence.
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
