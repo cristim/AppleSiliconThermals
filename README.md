@@ -1,12 +1,14 @@
 # 󰈐 AppleSiliconThermals
 
-**Native hardware thermal monitoring and fan speed control plugin for [Omarchy Linux](https://omarchy.org/) on Apple Silicon (M1 / M2) MacBooks.**
+**Hardware thermal monitoring and fan speed control plugin for [Omarchy Linux](https://omarchy.org/) on Apple Silicon (M1 / M2) MacBooks.**
 
-Inspired by the macOS menu bar utility **Stats**, **AppleSiliconThermals** bridges the Asahi Linux `macsmc_hwmon` kernel driver with the modern Omarchy Quickshell status bar. It provides real-time sensor telemetry, a dynamic status bar indicator with rotational animation, and a popup control panel offering continuous fan curve control and quick presets.
+This plugin is inspired by the macOS menu bar utility **Stats** (https://mac-stats.com/).
+
+**AppleSiliconThermals** bridges the Asahi Linux `macsmc_hwmon` kernel driver with the modern Omarchy Quickshell status bar. It provides real-time sensor telemetry, a dynamic status bar indicator with rotational animation, and a popup control panel offering continuous fan curve control and quick presets.
 
 ---
 
-## ✨ Features
+## Features
 
 - 󰈐 **Dynamic Status Bar Indicator**:
   - Compact fan icon (`󰈐`) seamlessly styled with active Omarchy theme tokens.
@@ -14,7 +16,7 @@ Inspired by the macOS menu bar utility **Stats**, **AppleSiliconThermals** bridg
   - Thermal color alerts: neutral when cool, warm amber (≥65°C), and urgent red (≥80°C).
   - Hover tooltip with live RPM and maximum temperature.
 
-- 🎛️ **Dual-Mode Fan Control (macOS Stats Style)**:
+- **Dual-Mode Fan Control (macOS Stats Style)**:
   - **Automatic Mode**: Relaxes fan management back to Apple's calibrated hardware SMC algorithms.
   - **Manual Mode**: Precision continuous slider from **1,199 RPM to 7,199 RPM** with 50 RPM quantization snapping to values ending in **49** and **99** for authentic macOS Stats parity.
   - **Instant Preset Chips**:
@@ -23,7 +25,7 @@ Inspired by the macOS menu bar utility **Stats**, **AppleSiliconThermals** bridg
     - `Regular`: Balanced cooling at **50%** (`3,599 RPM`).
     - `Max`: High-performance cooling at **100%** (`7,199 RPM`) for compiling, gaming, or heavy workloads.
 
-- 🌡️ **Comprehensive Hardware Telemetry**:
+- **Comprehensive Hardware Telemetry**:
   - Live Fan Speed (Current RPM, Target RPM, Minimum & Maximum limits).
   - Component temperatures: **NAND Flash**, **Battery Hotspot**, **Charge Voltage Regulator**, and **Wi-Fi / Bluetooth Module**.
   - Real-time Total System Power dissipation in Watts (`W`).
@@ -34,7 +36,7 @@ Inspired by the macOS menu bar utility **Stats**, **AppleSiliconThermals** bridg
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Option 1: Direct installation with Omarchy CLI
 
@@ -51,11 +53,13 @@ omarchy plugin enable AppleSiliconThermals right
 
 ---
 
-## ⚙️ One-Time Setup for Manual Fan Control
+## One-Time Setup for Manual Fan Control
 
 By default, the Linux kernel's `macsmc_hwmon` driver operates in read-only safe mode where the hardware SMC handles 100% of cooling decisions.
 
 To unlock manual fan speed regulation without requiring `sudo` on every slider adjustment:
+
+> Before executing the script, feel free to read it, or ask your favorite agent on what it does, if you don't feel comfortable doing so
 
 ```bash
 sudo ~/.config/omarchy/plugins/AppleSiliconThermals/setup.sh
@@ -68,22 +72,7 @@ This automated script:
 
 ---
 
-## 🛠️ Repository & Publishing
-
-To push and maintain this plugin on your personal GitHub account:
-
-```bash
-cd ~/.config/omarchy/plugins/AppleSiliconThermals
-git init -b main
-git add .
-git commit -m "Initial release of AppleSiliconThermals plugin for Omarchy"
-git remote add origin git@github.com:<your-username>/AppleSiliconThermals.git
-git push -u origin main
-```
-
----
-
-## 🖥️ Hardware Compatibility & Community Testing
+## Hardware Compatibility & Community Testing
 
 This plugin is purpose-built for Apple Silicon hardware running Linux. It dynamically adapts its UI depending on the detected Mac model and available cooling architecture:
 
@@ -97,9 +86,8 @@ This plugin is purpose-built for Apple Silicon hardware running Linux. It dynami
 | **iMac** | 24" M1 (2-port & 4-port) | Single / dual-fan control & telemetry | **Call for Testing** |
 | **Non-Apple / x86** | Standard PCs, VMs, Intel/AMD | Inactive warning icon (`󰌺`) & unsupported hardware notice | **Handled / Inactive** |
 
-> [!TIP]
 > **Do you own a Mac Studio, Mac mini, Mac Pro, or iMac?**
-> We would love your feedback! Please [open an issue](https://github.com/<your-username>/AppleSiliconThermals/issues) with your hardware details and test results to help refine multi-fan curves and fan channel independence.
+> Feedback is much appreciated! Please [open an issue](https://github.com/<your-username>/AppleSiliconThermals/issues) with your hardware details and test results to help refine multi-fan curves and fan channel independence.
 
 ---
 

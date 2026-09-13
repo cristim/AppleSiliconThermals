@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# attempt to get the device model
 get_device_model() {
   local model="Apple Silicon Mac"
   if [[ -f /proc/device-tree/model ]]; then
@@ -11,6 +12,7 @@ get_device_model() {
   echo "${model//\"/\\\"}"
 }
 
+# needed for fan control and thermal monitoring on Apple Silicon Macs
 find_macsmc_hwmon() {
   local dir
   for dir in /sys/class/hwmon/hwmon*; do
@@ -22,6 +24,7 @@ find_macsmc_hwmon() {
   return 1
 }
 
+# determine if the system is running on Apple Silicon hardware
 is_apple_silicon() {
   if [[ -f /proc/device-tree/compatible ]] && grep -q "apple," /proc/device-tree/compatible 2>/dev/null; then
     return 0
