@@ -47,8 +47,8 @@ omarchy plugin add https://github.com/LukasMoriarty/AppleSiliconThermals.git --e
 ### Option 2: Manual clone into plugins directory
 
 ```bash
-git clone https://github.com/LukasMoriarty/AppleSiliconThermals.git ~/.config/omarchy/plugins/AppleSiliconThermals
-omarchy plugin enable AppleSiliconThermals right
+git clone https://github.com/LukasMoriarty/AppleSiliconThermals.git ~/.config/omarchy/plugins/io.github.lukasmoriarty.applesiliconthermals
+omarchy plugin enable io.github.lukasmoriarty.applesiliconthermals right
 ```
 
 ---
@@ -62,7 +62,7 @@ To unlock manual fan speed regulation without requiring `sudo` on every slider a
 > Before executing the script, feel free to read it, or ask your favorite agent on what it does, if you don't feel comfortable doing so
 
 ```bash
-sudo ~/.config/omarchy/plugins/AppleSiliconThermals/setup.sh
+sudo ~/.config/omarchy/plugins/io.github.lukasmoriarty.applesiliconthermals/setup.sh
 ```
 
 This automated script:
@@ -77,14 +77,14 @@ This automated script:
 To remove the plugin from your Omarchy bar:
 
 ```bash
-omarchy plugin disable AppleSiliconThermals
-omarchy plugin remove AppleSiliconThermals
+omarchy plugin disable io.github.lukasmoriarty.applesiliconthermals
+omarchy plugin remove io.github.lukasmoriarty.applesiliconthermals
 ```
 
 *(Optional)* If you ran the one-time `setup.sh` and wish to revert the kernel parameter and udev rules back to system defaults:
 
 ```bash
-sudo ~/.config/omarchy/plugins/AppleSiliconThermals/uninstall.sh
+sudo ~/.config/omarchy/plugins/io.github.lukasmoriarty.applesiliconthermals/uninstall.sh
 ```
 *(Or manually remove `/etc/udev/rules.d/99-macsmc-fan.rules` and `/etc/tmpfiles.d/macsmc-fan.conf`).*
 
