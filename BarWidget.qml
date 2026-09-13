@@ -22,6 +22,25 @@ BarWidget {
   property bool popupOpen: false
   readonly property string helperPath: Qt.resolvedUrl("helper.sh").toString().replace(/^file:\/\//, "")
 
+  function applyData(jsonStr) {
+    try {
+      var data = JSON.parse(jsonStr)
+      if (data && !data.error) {
+        root.fanRpm = (data.fan_rpm !== undefined) ? data.fan_rpm : 0
+        root.fanMin = data.fan_min || 1199
+        root.fanMax = data.fan_max || 7199
+        root.fanTarget = (data.fan_target !== undefined) ? data.fan_target : 0
+        root.fanControlEnabled = Boolean(data.fan_control_enabled)
+        root.manualMode = Boolean(data.manual_mode)
+        root.maxTemp = (data.max_temp !== undefined) ? data.max_temp : 0
+        root.powerWatts = (data.power_watts !== undefined) ? data.power_watts : 0
+        root.sensors = data.sensors || {}
+      }
+    } catch (e) {
+      console.warn("AppleSiliconThermals parse error:", e, jsonStr)
+    }
+  }
+
   function refresh() {
     if (!readProc.running) {
       readProc.running = true
@@ -42,6 +61,8 @@ BarWidget {
     writeProc.running = true
   }
 
+  Component.onCompleted: root.refresh()
+
   // Periodic polling for live sensors
   Timer {
     interval: popupOpen ? 1500 : 3000
@@ -53,23 +74,22 @@ BarWidget {
 
   Process {
     id: readProc
+    property string buffer: ""
     command: [root.helperPath, "get"]
     stdout: SplitParser {
       onRead: function(line) {
-        try {
-          var data = JSON.parse(line)
-          if (data && !data.error) {
-            root.fanRpm = data.fan_rpm || 0
-            root.fanMin = data.fan_min || 1199
-            root.fanMax = data.fan_max || 7199
-            root.fanTarget = data.fan_target || 0
-            root.fanControlEnabled = data.fan_control_enabled || false
-            root.manualMode = data.manual_mode || false
-            root.maxTemp = data.max_temp || 0
-            root.powerWatts = data.power_watts || 0
-            root.sensors = data.sensors || {}
-          }
-        } catch (e) {}
+        var str = String(line).trim()
+        if (str.startsWith("{") && str.endsWith("}")) {
+          root.applyData(str)
+        } else {
+          readProc.buffer += line + "\n"
+        }
+      }
+    }
+    onExited: function(code) {
+      if (readProc.buffer.trim().length > 0) {
+        root.applyData(readProc.buffer.trim())
+        readProc.buffer = ""
       }
     }
   }

@@ -94,24 +94,9 @@ cmd_get() {
     power_val=$(awk "BEGIN { printf \"%.2f\", $raw_p / 1000000 }")
   fi
 
-  cat <<EOF
-{
-  "fan_rpm": $fan_rpm,
-  "fan_min": $fan_min,
-  "fan_max": $fan_max,
-  "fan_target": $fan_target,
-  "fan_control_enabled": $fan_control_enabled,
-  "manual_mode": $manual_mode,
-  "max_temp": $max_temp,
-  "power_watts": $power_val,
-  "sensors": {
-    "nand": $temp_nand,
-    "battery": $temp_battery,
-    "regulator": $temp_regulator,
-    "wifi": $temp_wifi
-  }
-}
-EOF
+  printf '{"fan_rpm":%d,"fan_min":%d,"fan_max":%d,"fan_target":%d,"fan_control_enabled":%s,"manual_mode":%s,"max_temp":%s,"power_watts":%s,"sensors":{"nand":%s,"battery":%s,"regulator":%s,"wifi":%s}}\n' \
+    "$fan_rpm" "$fan_min" "$fan_max" "$fan_target" "$fan_control_enabled" "$manual_mode" "$max_temp" "$power_val" \
+    "$temp_nand" "$temp_battery" "$temp_regulator" "$temp_wifi"
 }
 
 cmd_set() {
