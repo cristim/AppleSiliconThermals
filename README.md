@@ -41,13 +41,13 @@ This plugin is inspired by the macOS menu bar utility **Stats** (https://mac-sta
 ### Option 1: Direct installation with Omarchy CLI
 
 ```bash
-omarchy plugin add https://github.com/<your-github-username>/AppleSiliconThermals.git --enable
+omarchy plugin add https://github.com/LukasMoriarty/AppleSiliconThermals.git --enable
 ```
 
 ### Option 2: Manual clone into plugins directory
 
 ```bash
-git clone https://github.com/<your-github-username>/AppleSiliconThermals.git ~/.config/omarchy/plugins/AppleSiliconThermals
+git clone https://github.com/LukasMoriarty/AppleSiliconThermals.git ~/.config/omarchy/plugins/AppleSiliconThermals
 omarchy plugin enable AppleSiliconThermals right
 ```
 
@@ -87,7 +87,7 @@ This plugin is purpose-built for Apple Silicon hardware running Linux. It dynami
 | **Non-Apple / x86** | Standard PCs, VMs, Intel/AMD | Inactive warning icon (`󰌺`) & unsupported hardware notice | **Handled / Inactive** |
 
 > **Do you own a Mac Studio, Mac mini, Mac Pro, or iMac?**
-> Feedback is much appreciated! Please [open an issue](https://github.com/<your-username>/AppleSiliconThermals/issues) with your hardware details and test results to help refine multi-fan curves and fan channel independence.
+> Feedback is much appreciated! Please [open an issue](https://github.com/LukasMoriarty/AppleSiliconThermals/issues) with your hardware details and test results to help refine multi-fan curves and fan channel independence.
 
 ---
 
