@@ -30,7 +30,10 @@ class Cli(unittest.TestCase):
         self.put(self.broker, '#!/bin/sh\n[ ! -e "$AST_TEST_BROKER_FAIL" ] || { echo denied >&2; exit 1; }\n'
                  'printf "%s\\n" "$1" >> "$AST_TEST_BROKER_LOG"\n'
                  'for t in "$AST_HWMON_ROOT"/hwmon7/fan*_target; do\n'
-                 '  if [ "$1" = auto ]; then echo 0 > "$t"; else echo "$1" > "$t"; fi\n'
+                 '  v=0; s=${t%_target}\n'
+                 '  if [ "$1" != auto ]; then v=$1; [ "$v" -ge "$(cat ${s}_min)" ] || v=$(cat ${s}_min)\n'
+                 '    [ "$v" -le "$(cat ${s}_max)" ] || v=$(cat ${s}_max); fi\n'
+                 '  echo "$v" > "$t"\n'
                  'done\n')
         self.broker.chmod(0o755)
         self.env = dict(os.environ, AST_BROKER=str(self.broker),
@@ -74,11 +77,19 @@ class Cli(unittest.TestCase):
         self.run_cli('set', '4000', ok=False)
         self.assertEqual(json.loads(self.run_cli('get').stdout)['mode'], 'auto')
 
-    def test_fans_with_different_limits_are_refused(self):
-        self.put(self.hw / 'fan2_max', '6550')
-        result = self.run_cli('set', '4000', ok=False)
-        self.assertIn('different RPM limits', result.stderr)
-        self.assertEqual(self.broker_calls(), [])
+    def test_fans_with_different_limits_are_clamped_per_fan(self):
+        self.put(self.hw / 'fan1_max', '5798')
+        self.put(self.hw / 'fan2_max', '6241')
+        self.put(self.hw / 'fan2_label', 'Right "fan"')
+        self.run_cli('set', '7199')
+        self.assertEqual(self.broker_calls(), ['6241'])
+        data = json.loads(self.run_cli('get').stdout)
+        self.assertEqual((data['fan_min'], data['fan_max'], data['fan_target'], data['fan_rpm']),
+                         (1199, 6241, 6241, 3000))
+        self.assertEqual(data['fans'], [
+            {'index': 1, 'label': 'Fan 1', 'rpm': 1800, 'min': 1199, 'max': 5798, 'target': 5798},
+            {'index': 2, 'label': 'Right "fan"', 'rpm': 3000, 'min': 1199, 'max': 6241, 'target': 6241},
+        ])
 
     def test_missing_broker_means_fan_control_is_not_enabled(self):
         self.assertTrue(json.loads(self.run_cli('get').stdout)['fan_control_enabled'])

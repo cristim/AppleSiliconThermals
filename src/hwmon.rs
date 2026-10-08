@@ -108,6 +108,13 @@ impl Fan {
     pub fn clamp(&self, rpm: u32) -> u32 {
         rpm.clamp(self.min, self.max)
     }
+
+    pub fn label(&self) -> String {
+        read_text(&self.attr("label"))
+            .ok()
+            .filter(|label| !label.is_empty())
+            .unwrap_or_else(|| format!("Fan {}", self.index))
+    }
 }
 
 /// Fans that expose a target. A minimum of 0 would make the release value a manual stop.

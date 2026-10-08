@@ -71,14 +71,15 @@ fn controllable_fans(paths: &Paths) -> Result<(PathBuf, Vec<Fan>)> {
     if fans.is_empty() {
         return Err("no controllable fans (fanless or unsupported Mac)".into());
     }
-    // The root broker sets every fan to one RPM, so fans must share a range.
-    if fans
-        .iter()
-        .any(|fan| (fan.min, fan.max) != (fans[0].min, fans[0].max))
-    {
-        return Err("fans with different RPM limits are not supported".into());
-    }
     Ok((dir, fans))
+}
+
+/// Lowest minimum and highest maximum across fans. One target spans this range and the broker
+/// clamps it to each fan's own limits.
+fn speed_range(fans: &[Fan]) -> Option<(u32, u32)> {
+    let min = fans.iter().map(|fan| fan.min).min()?;
+    let max = fans.iter().map(|fan| fan.max).max()?;
+    Some((min, max))
 }
 
 fn get(paths: &Paths) -> Result {
@@ -119,8 +120,21 @@ fn get(paths: &Paths) -> Result {
         None => "auto",
     };
 
-    let fan = fans.first();
-    let rpm = |read: fn(&Fan) -> io::Result<u32>| fan.and_then(|fan| read(fan).ok()).unwrap_or(0);
+    let rpm = |fan: &Fan, read: fn(&Fan) -> io::Result<u32>| read(fan).unwrap_or(0);
+    let fastest = |read: fn(&Fan) -> io::Result<u32>| {
+        fans.iter().map(|fan| rpm(fan, read)).max().unwrap_or(0)
+    };
+    let (fan_min, fan_max) = speed_range(&fans).unwrap_or((0, 0));
+    let fans_json = json::array(fans.iter().map(|fan| {
+        Object::default()
+            .raw("index", fan.index)
+            .str("label", &fan.label())
+            .raw("rpm", rpm(fan, Fan::input))
+            .raw("min", fan.min)
+            .raw("max", fan.max)
+            .raw("target", rpm(fan, Fan::target))
+            .to_string()
+    }));
     let labelled = |needle: &str| {
         temps
             .iter()
@@ -178,10 +192,11 @@ fn get(paths: &Paths) -> Result {
         .raw("is_apple_silicon", true)
         .raw("has_fan", !fans.is_empty())
         .raw("fan_count", fans.len())
-        .raw("fan_rpm", rpm(Fan::input))
-        .raw("fan_min", fan.map_or(0, |fan| fan.min))
-        .raw("fan_max", fan.map_or(0, |fan| fan.max))
-        .raw("fan_target", rpm(Fan::target))
+        .raw("fan_rpm", fastest(Fan::input))
+        .raw("fan_min", fan_min)
+        .raw("fan_max", fan_max)
+        .raw("fan_target", fastest(Fan::target))
+        .raw("fans", fans_json)
         .raw("fan_control_enabled", paths.fan_control_enabled())
         .str("mode", mode)
         .raw("manual_mode", mode == "manual")
@@ -217,15 +232,20 @@ fn set(paths: &Paths, target: &str) -> Result {
     let _lock = state::lock().map_err(text)?;
     stop_curve()?;
     let (_, fans) = controllable_fans(paths)?;
-    broker::run(&rpm.map_or_else(|| "auto".to_string(), |rpm| fans[0].clamp(rpm).to_string()))?;
+    let rpm = rpm
+        .zip(speed_range(&fans))
+        .map(|(rpm, (min, max))| rpm.clamp(min, max));
+    broker::run(&rpm.map_or_else(|| "auto".to_string(), |rpm| rpm.to_string()))?;
     state::set_manual(rpm.is_some()).map_err(text)?;
     match rpm {
         None => println!("Fan control reset to automatic SMC mode"),
-        Some(rpm) => println!(
-            "Fan speed set to {} RPM across {} fan(s)",
-            fans[0].clamp(rpm),
-            fans.len()
-        ),
+        Some(rpm) => {
+            let speeds: Vec<String> = fans
+                .iter()
+                .map(|fan| format!("fan{}={}", fan.index, fan.clamp(rpm)))
+                .collect();
+            println!("Fan speed set to {}", speeds.join(" "));
+        }
     }
     Ok(())
 }
@@ -349,6 +369,19 @@ fn plan_writes(
     (actions, applied)
 }
 
+/// The single target the controller should compare with its last write. A fan counts as rewritten
+/// by firmware only when its target differs from the broker's clamp of the last value sent.
+fn controller_readback(fans: &[Fan], targets: &[u32], last_sent: Option<u32>) -> Option<u32> {
+    let Some(sent) = last_sent else {
+        return targets.first().copied();
+    };
+    let rewritten = fans
+        .iter()
+        .zip(targets)
+        .find(|&(fan, &target)| target != fan.clamp(sent));
+    Some(rewritten.map_or(sent, |(_, &target)| target))
+}
+
 fn curve_run(paths: &Paths) -> Result {
     // Only systemd guarantees the unit's ExecStopPost release; a manual run killed with Ctrl-C
     // would leave the fans on their last target. SYSTEMD_EXEC_PID names the exact process systemd
@@ -364,8 +397,8 @@ fn curve_run(paths: &Paths) -> Result {
     let binary = std::env::current_exe().map_err(text)?;
     let (dir, fans) = controllable_fans(paths)?;
     let config_path = state::config_path().map_err(text)?;
-    // The broker sets all fans together and they share one range, so one controller drives them.
-    let mut controller = Controller::new(&[(fans[0].min, fans[0].max)]);
+    let range = speed_range(&fans).ok_or("no controllable fans")?;
+    let mut controller = Controller::new(&[range]);
     let mut last_sent: Option<u32> = None;
 
     loop {
@@ -388,11 +421,7 @@ fn curve_run(paths: &Paths) -> Result {
             .zip(reading)
             .map(|(config, value)| (value, config));
         let targets: Option<Vec<u32>> = fans.iter().map(|fan| fan.target().ok()).collect();
-        // A fan whose target differs from the last write counts as a firmware rewrite.
-        let readback = targets.and_then(|targets| {
-            let rewritten = targets.iter().copied().find(|&rpm| Some(rpm) != last_sent);
-            rewritten.or_else(|| targets.first().copied())
-        });
+        let readback = targets.and_then(|targets| controller_readback(&fans, &targets, last_sent));
         let speed = fans.iter().filter_map(|fan| fan.input().ok()).max();
 
         let tick = controller.tick(input, &[readback], &[speed]);
@@ -412,7 +441,76 @@ fn curve_run(paths: &Paths) -> Result {
 
 #[cfg(test)]
 mod tests {
-    use super::plan_writes;
+    use super::*;
+    use curve::State;
+
+    /// Two fans with their own limits, as on a 14-inch M1 Pro.
+    fn two_fans(name: &str) -> (PathBuf, Paths) {
+        let root = std::env::temp_dir().join(format!("ast-main-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("hwmon2");
+        std::fs::create_dir_all(&dir).unwrap();
+        for (file, value) in [
+            ("name", "macsmc_hwmon"),
+            ("fan1_min", "1199"),
+            ("fan1_max", "5798"),
+            ("fan1_target", "0"),
+            ("fan2_min", "1199"),
+            ("fan2_max", "6241"),
+            ("fan2_target", "0"),
+        ] {
+            std::fs::write(dir.join(file), format!("{value}\n")).unwrap();
+        }
+        let paths = Paths {
+            hwmon_root: root.clone(),
+            sys_root: root.clone(),
+        };
+        (root, paths)
+    }
+
+    #[test]
+    fn fans_with_different_limits_share_one_widened_range() {
+        let (root, paths) = two_fans("range");
+        let (_, fans) = controllable_fans(&paths).unwrap();
+        assert_eq!(fans.len(), 2);
+        assert_eq!(speed_range(&fans), Some((1199, 6241)));
+        assert_eq!(speed_range(&[]), None);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_fan_held_at_its_own_max_is_not_a_firmware_rewrite() {
+        let (root, paths) = two_fans("readback");
+        let (_, fans) = controllable_fans(&paths).unwrap();
+        let cfg = Config {
+            sensor: "x".into(),
+            low: 50,
+            high: 75,
+        };
+        let hot = Some((80_000, &cfg));
+        let mut controller = Controller::new(&[speed_range(&fans).unwrap()]);
+        let mut last_sent = None;
+        let mut targets = vec![0, 0];
+        for _ in 0..5 {
+            let readback = controller_readback(&fans, &targets, last_sent);
+            let tick = controller.tick(hot, &[readback], &[None]);
+            assert_eq!(tick.state, State::Running);
+            let (actions, sent) = plan_writes(&tick.writes[0], last_sent, true);
+            assert!(actions.iter().all(|action| action != "auto"), "{actions:?}");
+            last_sent = sent;
+            // What the broker leaves in each fan's target.
+            targets = fans.iter().map(|fan| fan.clamp(sent.unwrap())).collect();
+        }
+        assert_eq!(targets, [5798, 6241]);
+        assert_eq!(last_sent, Some(6241));
+
+        assert_eq!(
+            controller_readback(&fans, &[5798, 3000], Some(6241)),
+            Some(3000)
+        );
+        assert_eq!(controller_readback(&fans, &[2000, 2000], None), Some(2000));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     fn plan(writes: &[u32], applied: Option<u32>) -> (Vec<String>, Option<u32>) {
         plan_writes(writes, applied, true)

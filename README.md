@@ -1,4 +1,4 @@
-# 󰈐 AppleSiliconThermals
+# AppleSiliconThermals
 
 Thermal monitoring and fan control for Apple Silicon Linux and the Omarchy shell.
 This fork replaces the shell helper with a dependency-free Rust binary and adds a
@@ -36,8 +36,8 @@ archive may still contain the placeholder.
 ## One-time setup for manual fan control
 
 Telemetry works without setup. Fan writes go through a root-owned broker that
-accepts only `auto` or an RPM between 1199 and 7199, so nothing in your
-user-writable checkout ever runs as root:
+accepts only `auto` or a four-digit RPM, which it clamps to each fan's own
+min..max, so nothing in your user-writable checkout ever runs as root:
 
 ```bash
 cd ~/.config/omarchy/plugins/io.github.lukasmoriarty.applesiliconthermals
@@ -71,7 +71,7 @@ privileges.
   low below high. Between thresholds the target rises linearly. Increases apply
   immediately; decreases are limited to about 300 RPM every two seconds.
 - **Manual** offers a slider and Quiet, Regular, and Max presets. Targets are
-  clamped to the fans' hardware limits. Manual also disables the curve.
+  clamped separately to each fan's hardware limits. Manual also disables the curve.
 
 **The exposed component sensors do not measure CPU/SoC die temperature and can lag
 CPU load.** The tested M1 exposes NAND, battery, charge regulator, and Wi-Fi/BT
@@ -80,8 +80,10 @@ readings. A temperature curve does not repair a dead battery or other hardware f
 The bar shows RPM, temperature, power, and the current mode. The popup shows curve
 status and command errors. Fanless Macs retain telemetry without fan controls.
 Hardware testing has been performed on a 13-inch M1 MacBook Pro; other models and
-multiple physical fans still need hardware testing. Fans must share one RPM range;
-the daemon refuses to run when they differ.
+multiple physical fans still need hardware testing. When fans have different limits
+(for example 5798 and 6241 RPM on a 14-inch M1 Pro), the curve, slider and presets
+span the lowest minimum to the highest maximum, the broker clamps each fan to its
+own range, and the popup lists every fan.
 
 ## Screenshots
 
